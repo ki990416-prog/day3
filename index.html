@@ -6,25 +6,113 @@
     <title>제주 여행 추천 에이전트</title>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.css">
     <style>
-        body { margin: 0; font-family: sans-serif; }
-        #bar { padding: 8px; display: flex; gap: 6px; background: #1b1f2a; }
-        #q { flex: 1; padding: 8px; font-size: 16px; }
-        button { padding: 8px 14px; font-size: 16px; }
-        #out { padding: 10px; max-height: 38vh; overflow: auto; white-space: pre-wrap; line-height: 1.5; }
-        #steps { font-size: 13px; color: #666; margin-bottom: 6px; }
-        #map { height: 50vh; }
+        :root {
+            --bg: #f4f7fb; --card: #ffffff; --text: #1d2433; --muted: #6b7587; --line: #e3e8f0;
+            --brand: #0ea5a4; --brand2: #2563eb; --chip: #eef6ff; --shadow: 0 6px 24px rgba(20, 40, 80, .08);
+        }
+        @media (prefers-color-scheme: dark) {
+            :root {
+                --bg: #0f141d; --card: #181f2c; --text: #e8edf6; --muted: #98a3b8; --line: #2a3447;
+                --chip: #1f2b40; --shadow: 0 6px 24px rgba(0, 0, 0, .35);
+            }
+        }
+        * { box-sizing: border-box; }
+        body { margin: 0; font-family: "Pretendard", "Segoe UI", "Malgun Gothic", sans-serif; background: var(--bg); color: var(--text); }
+
+        header {
+            padding: 22px 20px 56px; color: #fff;
+            background: linear-gradient(120deg, var(--brand), var(--brand2));
+        }
+        header h1 { margin: 0 0 4px; font-size: 22px; }
+        header p { margin: 0; opacity: .9; font-size: 14px; }
+
+        main {
+            display: grid; grid-template-columns: minmax(320px, 440px) 1fr; gap: 16px;
+            max-width: 1200px; margin: -36px auto 24px; padding: 0 16px;
+        }
+        @media (max-width: 860px) { main { grid-template-columns: 1fr; } }
+
+        .card { background: var(--card); border: 1px solid var(--line); border-radius: 16px; box-shadow: var(--shadow); }
+        .panel { padding: 16px; display: flex; flex-direction: column; gap: 14px; }
+
+        .ask { display: flex; gap: 8px; }
+        .ask input {
+            flex: 1; padding: 12px 14px; font-size: 15px; color: var(--text); background: var(--bg);
+            border: 1px solid var(--line); border-radius: 12px; outline: none;
+        }
+        .ask input:focus { border-color: var(--brand); }
+        .ask button {
+            padding: 0 18px; font-size: 15px; font-weight: 600; color: #fff; cursor: pointer;
+            border: 0; border-radius: 12px; background: linear-gradient(120deg, var(--brand), var(--brand2));
+        }
+        .ask button:disabled { opacity: .55; cursor: wait; }
+
+        .chips { display: flex; flex-wrap: wrap; gap: 6px; }
+        .chips button {
+            padding: 6px 12px; font-size: 13px; color: var(--text); cursor: pointer;
+            background: var(--chip); border: 1px solid var(--line); border-radius: 999px;
+        }
+        .chips button:hover { border-color: var(--brand); }
+
+        .weather { display: none; align-items: center; gap: 14px; padding: 14px; border-radius: 14px; background: var(--chip); }
+        .weather .icon { font-size: 40px; line-height: 1; }
+        .weather .temp { font-size: 26px; font-weight: 700; }
+        .weather .sub { font-size: 13px; color: var(--muted); }
+        .days { display: flex; gap: 8px; margin-left: auto; }
+        .days div { text-align: center; font-size: 12px; color: var(--muted); }
+        .days b { display: block; font-size: 18px; margin: 2px 0; }
+
+        .steps { display: flex; flex-wrap: wrap; gap: 6px; }
+        .step { font-size: 12px; padding: 4px 10px; border-radius: 999px; color: var(--brand2); background: var(--chip); border: 1px solid var(--line); }
+
+        .answer { line-height: 1.65; font-size: 15px; }
+        .answer.muted { color: var(--muted); }
+        .answer ul { margin: 6px 0; padding-left: 20px; }
+        .loading::after { content: ""; display: inline-block; width: 14px; height: 14px; margin-left: 8px; vertical-align: -2px;
+            border: 2px solid var(--line); border-top-color: var(--brand); border-radius: 50%; animation: spin .8s linear infinite; }
+        @keyframes spin { to { transform: rotate(360deg); } }
+
+        .spots { display: grid; gap: 8px; }
+        .spot { padding: 10px 12px; border: 1px solid var(--line); border-radius: 12px; cursor: pointer; }
+        .spot:hover { border-color: var(--brand); }
+        .spot b { font-size: 14px; }
+        .spot small { display: block; margin-top: 2px; color: var(--muted); }
+        .tag { display: inline-block; margin-right: 4px; padding: 1px 8px; font-size: 11px; border-radius: 999px; background: var(--chip); }
+
+        #map { height: 100%; min-height: 420px; border-radius: 16px; }
+        .mapcard { padding: 6px; }
+        @media (max-width: 860px) { .mapcard { order: -1; } #map { min-height: 300px; } }
+        footer { text-align: center; color: var(--muted); font-size: 12px; padding: 0 16px 24px; }
     </style>
 </head>
 <body>
-    <div id="bar">
-        <input id="q" placeholder="예) 내일 서귀포 가는데 뭐 할까? / 비 오는 날 제주시 가볼 만한 곳">
-        <button id="btn">추천받기</button>
-    </div>
-    <div id="out">
-        <div id="steps"></div>
-        <div id="answer">여행 계획을 물어보세요. 에이전트가 날씨(get_weather)와 관광지(find_spots)를 알아서 찾아 추천합니다.</div>
-    </div>
-    <div id="map"></div>
+    <header>
+        <h1>🌴 제주 여행 추천 에이전트</h1>
+        <p>날씨(get_weather)와 관광지(find_spots)를 AI가 알아서 찾아 추천해 드려요</p>
+    </header>
+
+    <main>
+        <section class="card panel">
+            <div class="ask">
+                <input id="q" placeholder="예) 내일 서귀포 가는데 뭐 할까?">
+                <button id="btn">추천받기</button>
+            </div>
+            <div class="chips" id="chips">
+                <button>비 오는 날 제주시 가볼 만한 곳</button>
+                <button>서귀포 바다 근처 야외 관광지</button>
+                <button>동쪽에서 실내로 갈 곳</button>
+                <button>서쪽 오름 추천해줘</button>
+            </div>
+
+            <div class="weather" id="weather"></div>
+            <div class="steps" id="steps"></div>
+            <div class="answer muted" id="answer">여행 계획을 물어보세요. 날씨에 맞춰 실내/야외 관광지를 추천하고 지도에 표시합니다.</div>
+            <div class="spots" id="spots"></div>
+        </section>
+
+        <section class="card mapcard"><div id="map"></div></section>
+    </main>
+    <footer>지도 위치는 지역 중심 기준의 대략적인 위치입니다 · 날씨: Open-Meteo · 지도: OpenStreetMap</footer>
 
     <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.js"></script>
     <script>
@@ -50,22 +138,78 @@
             return [lat + jitter(s.name, 7), lng + jitter(s.name, 13)]
         }
 
+        const $ = (id) => document.getElementById(id)
+        const esc = (t) => t.replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]))
+
+        // 답변의 **굵게**, 목록(* 또는 -), 줄바꿈만 간단히 꾸민다
+        const format = (text) => {
+            const lines = esc(text).split("\n")
+            let html = "", inList = false
+            for (const line of lines) {
+                const m = line.match(/^\s*[*-]\s+(.*)/)
+                if (m && !inList) { html += "<ul>"; inList = true }
+                if (!m && inList) { html += "</ul>"; inList = false }
+                const body = (m ? m[1] : line).replace(/\*\*(.+?)\*\*/g, "<b>$1</b>")
+                html += m ? `<li>${body}</li>` : (body ? `<div>${body}</div>` : "<br>")
+            }
+            return html + (inList ? "</ul>" : "")
+        }
+
+        const emoji = (w) =>
+            w.includes("맑음") ? "☀️" : w.includes("구름") ? "⛅" : w.includes("안개") ? "🌫️" :
+            w.includes("눈") ? "❄️" : w.includes("뇌우") ? "⛈️" : "🌧️"
+
         // Leaflet + OpenStreetMap
         const map = L.map("map").setView([33.38, 126.55], 10)
         L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", {
             attribution: "&copy; OpenStreetMap contributors", maxZoom: 18
         }).addTo(map)
         const layer = L.layerGroup().addTo(map)
+        let markers = {}
+
+        const showWeather = (w) => {
+            const box = $("weather")
+            if (!w) { box.style.display = "none"; return }
+            box.style.display = "flex"
+            box.innerHTML =
+                `<div class="icon">${emoji(w.now.weather)}</div>` +
+                `<div><div class="temp">${w.now.temperature_c}°C</div>` +
+                `<div class="sub">${esc(w.area)} · ${esc(w.now.weather)} · 바람 ${w.now.wind_speed_kmh}km/h</div></div>` +
+                `<div class="days">` + w.forecast.map(d =>
+                    `<div>${d.date.slice(5)}<b>${emoji(d.weather)}</b>${d.rain_probability_percent}%</div>`).join("") + `</div>`
+        }
+
+        const showSpots = (spots) => {
+            layer.clearLayers(); markers = {}
+            const seen = new Set()
+            const found = spots.filter(s => !seen.has(s.name) && seen.add(s.name))
+            $("spots").innerHTML = found.map(s =>
+                `<div class="spot" data-name="${esc(s.name)}"><b>${esc(s.name)}</b>` +
+                `<small><span class="tag">${s.indoor ? "실내" : "야외"}</span><span class="tag">${esc(s.area)}</span>${esc(s.description)}</small></div>`
+            ).join("")
+            for (const s of found) {
+                markers[s.name] = L.marker(pos(s)).addTo(layer)
+                    .bindPopup(`<b>${esc(s.name)}</b><br>${esc(s.area)} · ${s.indoor ? "실내" : "야외"}<br>${esc(s.description)}`)
+            }
+            if (found.length) map.fitBounds(L.latLngBounds(found.map(pos)).pad(0.2))
+        }
+
+        // 목록 카드를 누르면 지도에서 해당 마커를 연다
+        $("spots").onclick = (e) => {
+            const el = e.target.closest(".spot")
+            const m = el && markers[el.dataset.name]
+            if (m) { map.setView(m.getLatLng(), 13); m.openPopup() }
+        }
 
         const ask = async () => {
-            const q = document.getElementById("q").value.trim()
+            const q = $("q").value.trim()
             if (!q) return
-            const btn = document.getElementById("btn")
-            const steps = document.getElementById("steps")
-            const answer = document.getElementById("answer")
-            btn.disabled = true
-            steps.textContent = ""
-            answer.textContent = "에이전트가 날씨와 관광지를 찾는 중..."
+            $("btn").disabled = true
+            $("steps").innerHTML = ""
+            $("spots").innerHTML = ""
+            showWeather(null)
+            $("answer").className = "answer muted loading"
+            $("answer").textContent = "에이전트가 날씨와 관광지를 찾는 중"
             try {
                 const res = await fetch("/api/chat", {
                     method: "POST",
@@ -75,25 +219,24 @@
                 const data = await res.json()
                 if (!res.ok) throw new Error(data.error || "오류가 발생했습니다.")
 
-                steps.textContent = data.steps.map(s => `🔧 ${s.tool}(${JSON.stringify(s.args)})`).join("  →  ")
-                answer.textContent = data.answer
-
-                layer.clearLayers()
-                const seen = new Set()
-                const found = data.spots.filter(s => !seen.has(s.name) && seen.add(s.name))
-                for (const s of found) {
-                    L.marker(pos(s)).addTo(layer)
-                        .bindPopup(`<b>${s.name}</b><br>${s.area} · ${s.indoor ? "실내" : "야외"}<br>${s.description}`)
-                }
-                if (found.length) map.fitBounds(L.latLngBounds(found.map(pos)).pad(0.2))
+                $("steps").innerHTML = data.steps.map(s =>
+                    `<span class="step">🔧 ${esc(s.tool)}(${esc(Object.values(s.args).join(", "))})</span>`).join("")
+                $("answer").className = "answer"
+                $("answer").innerHTML = format(data.answer)
+                showWeather(data.weather)
+                showSpots(data.spots)
             } catch (e) {
-                answer.textContent = "오류: " + e.message
+                $("answer").className = "answer"
+                $("answer").textContent = "오류: " + e.message
             }
-            btn.disabled = false
+            $("btn").disabled = false
         }
 
-        document.getElementById("btn").onclick = ask
-        document.getElementById("q").onkeydown = (e) => { if (e.key === "Enter") ask() }
+        $("btn").onclick = ask
+        $("q").onkeydown = (e) => { if (e.key === "Enter") ask() }
+        $("chips").onclick = (e) => {
+            if (e.target.tagName === "BUTTON") { $("q").value = e.target.textContent; ask() }
+        }
     </script>
 </body>
 </html>

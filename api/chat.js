@@ -48,6 +48,7 @@ module.exports = async (req, res) => {
         const contents = [{ role: "user", parts: [{ text: message }] }]
         const steps = []   // 에이전트가 사용한 도구 기록 (화면 표시용)
         const spots = []   // find_spots 결과 (지도 표시용)
+        let weather = null // 마지막 get_weather 결과 (날씨 카드용)
 
         for (let turn = 0; turn < MAX_TURNS; turn++) {
             const data = await callGemini(contents)
@@ -57,7 +58,7 @@ module.exports = async (req, res) => {
             const calls = (content.parts || []).filter(p => p.functionCall)
             if (calls.length === 0) {
                 const answer = (content.parts || []).map(p => p.text || "").join("")
-                return res.status(200).json({ answer, steps, spots })
+                return res.status(200).json({ answer, steps, spots, weather })
             }
 
             // 모델이 요청한 도구를 실행하고 결과를 돌려준다 (모델 응답은 그대로 기록에 넣는다)
@@ -69,11 +70,12 @@ module.exports = async (req, res) => {
                 const result = handler ? await handler(args || {}) : { error: "알 수 없는 도구입니다." }
                 steps.push({ tool: name, args: args || {} })
                 if (name === "find_spots" && Array.isArray(result)) spots.push(...result)
+                if (name === "get_weather" && result && result.now) weather = result
                 results.push({ functionResponse: { name, response: { result } } })
             }
             contents.push({ role: "user", parts: results })
         }
-        res.status(200).json({ answer: "답변을 만들지 못했습니다. 다시 시도해 주세요.", steps, spots })
+        res.status(200).json({ answer: "답변을 만들지 못했습니다. 다시 시도해 주세요.", steps, spots, weather })
     } catch (e) {
         res.status(500).json({ error: e.message })
     }
