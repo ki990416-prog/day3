@@ -1,6 +1,7 @@
 const { handlers, gemini_tools } = require("./tools")
 
-const MODEL = process.env.GEMINI_MODEL || "gemini-2.5-flash"
+// PDF에서 테스트에 성공한 모델. 무료 한도가 넉넉하다 (분당 15회 / 하루 500회)
+const MODEL = process.env.GEMINI_MODEL || "gemini-3.5-flash-lite"
 const ENDPOINT = `https://generativelanguage.googleapis.com/v1beta/models/${MODEL}:generateContent`
 const MAX_TURNS = 5
 
@@ -25,7 +26,12 @@ async function callGemini(contents) {
             tools: gemini_tools,
         }),
     })
-    if (!res.ok) throw new Error(`Gemini 오류 ${res.status}`)
+    if (!res.ok) {
+        const body = await res.json().catch(() => ({}))
+        const detail = (body.error && body.error.message) || ""
+        if (res.status === 429) throw new Error("Gemini 무료 사용 한도를 넘었습니다. 잠시 후 다시 시도해 주세요.")
+        throw new Error(`Gemini 오류 ${res.status} ${detail}`.trim())
+    }
     return res.json()
 }
 
