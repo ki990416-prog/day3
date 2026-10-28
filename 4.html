@@ -1,0 +1,29 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=, initial-scale=1.0">
+    <title>Document</title>
+</head>
+<body>
+    <script>
+        // key 번호 100개 (a1 ~ a100)
+        let v = Array.from({length:100}, (_, n)=> n+1)
+
+        // key마다 배열 길이가 다름: a1은 101개, a2는 102개 ... a100은 200개
+        let data = {}
+        for (const i of v) {
+            data["a"+i] = Array.from({length:100+i}, (_, n)=> i*1000+n)
+        }
+
+
+        const show = (id)=> console.log(id+" 를 보여줘")
+        for (const i of v) {
+            for (const element of data["a"+i]) {
+                console.log(element+"\n")
+                show(element)
+            }
+        }
+    </script>
+</body>
+</html>

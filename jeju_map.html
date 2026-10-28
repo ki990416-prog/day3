@@ -1,0 +1,102 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>제주 관광지 지도</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.css">
+    <style>
+        body { margin: 0; font-family: sans-serif; }
+        #bar { padding: 8px; display: flex; gap: 6px; }
+        select, button { padding: 6px; font-size: 16px; }
+        #info { padding: 0 8px 6px; font-size: 13px; color: #555; }
+        #map { height: calc(100vh - 90px); }
+    </style>
+</head>
+<body>
+    <div id="bar">
+        <select id="area">
+            <option>동쪽</option>
+            <option>서쪽</option>
+            <option>서귀포</option>
+            <option>제주시</option>
+        </select>
+        <select id="indoor">
+            <option value="">실내/야외 전체</option>
+            <option value="true">실내</option>
+            <option value="false">야외</option>
+        </select>
+        <button id="btn">검색</button>
+    </div>
+    <div id="info">지역을 고르고 검색을 누르세요. 위치는 지역 중심 기준의 대략적인 위치입니다.</div>
+    <div id="map"></div>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.js"></script>
+    <script src="jeju_spots.js"></script>
+    <script>
+        // 데이터에 좌표가 없어서 지역(area) 중심 좌표를 사용 (대략적인 위치)
+        const center = {
+            "동쪽(성산)": [33.4580, 126.9300],
+            "동쪽(구좌)": [33.5300, 126.8000],
+            "제주시":     [33.4800, 126.5000],
+            "서쪽(한림)": [33.4100, 126.2700],
+            "서쪽(안덕)": [33.2600, 126.3400],
+            "서귀포":     [33.2800, 126.5500],
+        }
+        // 섬은 따로 지정
+        const islands = {
+            "우도": [33.5000, 126.9520], "추자도": [33.9500, 126.3000],
+            "마라도": [33.1150, 126.2670], "가파도": [33.1700, 126.2700],
+            "비양도": [33.4150, 126.2300], "차귀도": [33.3100, 126.1650],
+        }
+
+        // Leaflet + OpenStreetMap
+        const map = L.map("map").setView([33.38, 126.55], 10)
+        L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", {
+            attribution: "&copy; OpenStreetMap contributors", maxZoom: 18
+        }).addTo(map)
+        const layer = L.layerGroup().addTo(map)
+
+        // jeju_spots.json 내용을 담은 jeju_spots.js (파일로 바로 열어도 동작하도록)
+        const spots = jeju_data.spots
+
+        // 이름으로 같은 위치에 겹치지 않도록 항상 같은 값의 작은 흔들림을 준다
+        const jitter = (name, k) => {
+            let h = 0
+            for (const c of name) h = (h * 31 + c.charCodeAt(0)) % 10007
+            return ((h * k) % 1000 / 1000 - 0.5) * 0.12
+        }
+        const pos = (s) => {
+            if (islands[s.name]) return islands[s.name]
+            const [lat, lng] = center[s.area]
+            return [lat + jitter(s.name, 7), lng + jitter(s.name, 13)]
+        }
+
+        // api/tools.js의 find_spots와 같은 규칙: 지역 + 실내 여부(생략 가능), 최대 8곳
+        const find_spots = ({ area, indoor }) =>
+            spots
+                .filter(s => s.area === area || s.area.startsWith(area + "("))
+                .filter(s => indoor === undefined || s.indoor === indoor)
+                .slice(0, 8)
+
+        const show_on_map = (found) => {
+            layer.clearLayers()
+            for (const s of found) {
+                L.marker(pos(s)).addTo(layer)
+                    .bindPopup(`<b>${s.name}</b><br>${s.area} · ${s.indoor ? "실내" : "야외"}<br>${s.type}`)
+            }
+            if (found.length) map.fitBounds(L.latLngBounds(found.map(pos)).pad(0.2))
+            document.getElementById("info").textContent =
+                found.length + "곳 표시 (위치는 지역 중심 기준의 대략적인 위치)"
+        }
+
+        document.getElementById("btn").onclick = () => {
+            const v = document.getElementById("indoor").value
+            show_on_map(find_spots({
+                area: document.getElementById("area").value,
+                indoor: v === "" ? undefined : v === "true"
+            }))
+        }
+    </script>
+</body>
+</html>
