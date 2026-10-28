@@ -3,86 +3,97 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>실시간 지진 지도</title>
+    <title>제주 여행 추천 에이전트</title>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.css">
     <style>
         body { margin: 0; font-family: sans-serif; }
-        #bar { padding: 8px; display: flex; gap: 8px; align-items: center; background: #1b1f2a; color: #fff; }
-        #bar b { font-size: 18px; }
-        select { padding: 6px; font-size: 16px; }
-        #info { font-size: 13px; color: #cfd6e6; margin-left: auto; text-align: right; }
-        #map { height: calc(100vh - 52px); }
-        .legend { background: #fff; padding: 8px 10px; border-radius: 6px; font-size: 12px; line-height: 1.6; }
-        .legend i { display: inline-block; width: 12px; height: 12px; border-radius: 50%; margin-right: 6px; vertical-align: middle; }
+        #bar { padding: 8px; display: flex; gap: 6px; background: #1b1f2a; }
+        #q { flex: 1; padding: 8px; font-size: 16px; }
+        button { padding: 8px 14px; font-size: 16px; }
+        #out { padding: 10px; max-height: 38vh; overflow: auto; white-space: pre-wrap; line-height: 1.5; }
+        #steps { font-size: 13px; color: #666; margin-bottom: 6px; }
+        #map { height: 50vh; }
     </style>
 </head>
 <body>
     <div id="bar">
-        <b>🌍 실시간 지진 지도</b>
-        <select id="feed">
-            <option value="all_hour">지난 1시간</option>
-            <option value="all_day" selected>지난 24시간</option>
-            <option value="2.5_week">지난 7일 (규모 2.5 이상)</option>
-            <option value="4.5_week">지난 7일 (규모 4.5 이상)</option>
-        </select>
-        <div id="info">불러오는 중...</div>
+        <input id="q" placeholder="예) 내일 서귀포 가는데 뭐 할까? / 비 오는 날 제주시 가볼 만한 곳">
+        <button id="btn">추천받기</button>
+    </div>
+    <div id="out">
+        <div id="steps"></div>
+        <div id="answer">여행 계획을 물어보세요. 에이전트가 날씨(get_weather)와 관광지(find_spots)를 알아서 찾아 추천합니다.</div>
     </div>
     <div id="map"></div>
 
     <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.js"></script>
     <script>
+        // 데이터에 좌표가 없어서 지역(area) 중심 좌표를 사용 (대략적인 위치)
+        const center = {
+            "동쪽(성산)": [33.4580, 126.9300], "동쪽(구좌)": [33.5300, 126.8000],
+            "제주시": [33.4800, 126.5000], "서귀포": [33.2800, 126.5500],
+            "서쪽(한림)": [33.4100, 126.2700], "서쪽(안덕)": [33.2600, 126.3400],
+        }
+        const islands = {
+            "우도": [33.5000, 126.9520], "추자도": [33.9500, 126.3000],
+            "마라도": [33.1150, 126.2670], "가파도": [33.1700, 126.2700],
+            "비양도": [33.4150, 126.2300], "차귀도": [33.3100, 126.1650],
+        }
+        const jitter = (name, k) => {
+            let h = 0
+            for (const c of name) h = (h * 31 + c.charCodeAt(0)) % 10007
+            return ((h * k) % 1000 / 1000 - 0.5) * 0.12
+        }
+        const pos = (s) => {
+            if (islands[s.name]) return islands[s.name]
+            const [lat, lng] = center[s.area]
+            return [lat + jitter(s.name, 7), lng + jitter(s.name, 13)]
+        }
+
         // Leaflet + OpenStreetMap
-        const map = L.map("map", { worldCopyJump: true }).setView([20, 140], 3)
+        const map = L.map("map").setView([33.38, 126.55], 10)
         L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", {
-            attribution: "&copy; OpenStreetMap contributors | 지진 데이터: USGS", maxZoom: 18
+            attribution: "&copy; OpenStreetMap contributors", maxZoom: 18
         }).addTo(map)
         const layer = L.layerGroup().addTo(map)
 
-        // 규모별 색과 크기
-        const color = (m) => m >= 6 ? "#7f0000" : m >= 5 ? "#e53935" : m >= 4 ? "#fb8c00" : m >= 3 ? "#fdd835" : "#43a047"
-        const radius = (m) => Math.max(3, m * m * 0.9 + 2)
-
-        // 범례
-        const legend = L.control({ position: "bottomright" })
-        legend.onAdd = () => {
-            const div = L.DomUtil.create("div", "legend")
-            div.innerHTML = [["#7f0000", "규모 6 이상"], ["#e53935", "5 ~ 6"], ["#fb8c00", "4 ~ 5"], ["#fdd835", "3 ~ 4"], ["#43a047", "3 미만"]]
-                .map(([c, t]) => `<i style="background:${c}"></i>${t}`).join("<br>")
-            return div
-        }
-        legend.addTo(map)
-
-        const load = async () => {
-            const info = document.getElementById("info")
-            const feed = document.getElementById("feed").value
+        const ask = async () => {
+            const q = document.getElementById("q").value.trim()
+            if (!q) return
+            const btn = document.getElementById("btn")
+            const steps = document.getElementById("steps")
+            const answer = document.getElementById("answer")
+            btn.disabled = true
+            steps.textContent = ""
+            answer.textContent = "에이전트가 날씨와 관광지를 찾는 중..."
             try {
-                const res = await fetch(`https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/${feed}.geojson`)
+                const res = await fetch("/api/chat", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ message: q })
+                })
                 const data = await res.json()
+                if (!res.ok) throw new Error(data.error || "오류가 발생했습니다.")
+
+                steps.textContent = data.steps.map(s => `🔧 ${s.tool}(${JSON.stringify(s.args)})`).join("  →  ")
+                answer.textContent = data.answer
+
                 layer.clearLayers()
-                let max = null
-                for (const f of data.features) {
-                    const m = f.properties.mag
-                    if (m == null) continue
-                    if (!max || m > max.properties.mag) max = f
-                    const [lng, lat, depth] = f.geometry.coordinates
-                    L.circleMarker([lat, lng], {
-                        radius: radius(m), color: color(m), fillColor: color(m), fillOpacity: 0.6, weight: 1
-                    }).addTo(layer).bindPopup(
-                        `<b>규모 ${m}</b><br>${f.properties.place}<br>` +
-                        `${new Date(f.properties.time).toLocaleString("ko-KR")}<br>` +
-                        `깊이 ${depth}km<br><a href="${f.properties.url}" target="_blank">상세 보기</a>`
-                    )
+                const seen = new Set()
+                const found = data.spots.filter(s => !seen.has(s.name) && seen.add(s.name))
+                for (const s of found) {
+                    L.marker(pos(s)).addTo(layer)
+                        .bindPopup(`<b>${s.name}</b><br>${s.area} · ${s.indoor ? "실내" : "야외"}<br>${s.description}`)
                 }
-                info.textContent = `${data.features.length}건` +
-                    (max ? ` · 최대 규모 ${max.properties.mag} (${max.properties.place})` : "")
+                if (found.length) map.fitBounds(L.latLngBounds(found.map(pos)).pad(0.2))
             } catch (e) {
-                info.textContent = "데이터를 불러오지 못했습니다."
+                answer.textContent = "오류: " + e.message
             }
+            btn.disabled = false
         }
 
-        document.getElementById("feed").onchange = load
-        load()
-        setInterval(load, 60000) // 1분마다 새로고침
+        document.getElementById("btn").onclick = ask
+        document.getElementById("q").onkeydown = (e) => { if (e.key === "Enter") ask() }
     </script>
 </body>
 </html>
